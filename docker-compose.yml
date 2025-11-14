@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  dq_api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./data:/app/data:ro
+      - ./reports:/app/reports
+      - ./src:/app/src:ro
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
