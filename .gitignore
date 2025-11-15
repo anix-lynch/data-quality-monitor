@@ -158,3 +158,4 @@ global.env
 *.tmp
 *.temp
 .cache/
+global.env
