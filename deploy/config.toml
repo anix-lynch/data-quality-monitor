@@ -1,0 +1,48 @@
+# Distro Dojo - Unified Deployment Configuration
+# Takehome3: Data Quality Assessment
+# All deployment settings in one unified location
+
+[project]
+name = "takehome3-data-quality"
+version = "1.0.0"
+description = "Data Quality Assessment and Validation System"
+
+[deployment]
+# Unified deployment settings
+type = "unified"  # Follows distro dojo rule
+strategy = "streamlit-cloud"
+environment = "production"
+
+[services.main]
+name = "data-quality-app"
+port = 8501
+main_file = "app.py"
+framework = "streamlit"
+
+[github]
+repository = "https://github.com/anix-lynch/takehome3-data-quality"
+branch = "main"
+streamlit_url = "https://share.streamlit.io/anix-lynch/takehome3-data-quality/main/app.py"
+
+[paths]
+# Unified asset paths (distro dojo)
+src_dir = "src"
+tests_dir = "tests"
+data_dir = "data"
+scripts_dir = "scripts"
+reports_dir = "reports"
+deploy_dir = "deploy"
+
+[features]
+data_quality_assessment = true
+validation_engine = true
+reporting_dashboard = true
+automated_testing = true
+streamlit_deployment = true
+github_integration = true
+
+[requirements]
+python = ">=3.11"
+streamlit = ">=1.28.0"
+github_token = true
+secrets_available = true
