@@ -2,19 +2,19 @@
 """
 Data Quality & Monitoring Dashboard - Streamlit Web App
 
-🎯 PURPOSE: Interactive web dashboard for real-time data quality monitoring with automated report generation and drift visualization
-📊 FEATURES: Live quality metrics, interactive charts, automated report generation, data freshness tracking, drift indicators, professional UI
-🏗️ ARCHITECTURE: Streamlit frontend → DataQualityMonitor engine → Interactive visualizations → Automated reports → Live data insights
-⚡ STATUS: Production web application, handles large datasets, real-time updates, professional UX, deployment-ready
+🎯 PURPOSE: Interactive web interface for real-time data quality monitoring with comprehensive visualization and automated reporting
+📊 FEATURES: Live quality metrics dashboard, interactive data exploration, automated report generation, health monitoring, drift analysis
+🏗️ ARCHITECTURE: Streamlit frontend → DataQualityMonitor engine → Pandas data processing → Automated HTML/JSON reports
+⚡ STATUS: Production web application with responsive UI, real-time updates, comprehensive error handling, Docker-ready deployment
 """
 
 import streamlit as st
 import pandas as pd
 import json
+from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
-from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 from src.data_quality_monitor import DataQualityMonitor
@@ -27,368 +27,374 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for professional styling
+# Custom CSS for better styling
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1.5rem;
+        background-color: #f0f2f6;
+        padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        margin: 0.5rem 0;
-    }
-    .metric-value {
-        font-size: 2rem;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-    }
-    .metric-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
-    .status-good {
-        color: #28a745;
-        font-weight: bold;
-    }
-    .status-warning {
-        color: #ffc107;
-        font-weight: bold;
-    }
-    .status-error {
-        color: #dc3545;
-        font-weight: bold;
-    }
-    .report-section {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin: 1rem 0;
         border-left: 4px solid #1f77b4;
+        margin: 10px 0;
+    }
+    .success-metric { border-left-color: #28a745; }
+    .warning-metric { border-left-color: #ffc107; }
+    .error-metric { border-left-color: #dc3545; }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #f8f9fa;
+        border-radius: 4px 4px 0 0;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #1f77b4;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-def load_data_quality_monitor():
-    """Initialize the data quality monitor."""
+def load_data():
+    """Load sample datasets."""
+    data_dir = Path("data")
+
+    # Load datasets
     try:
-        data_dir = Path(__file__).parent / "data"
-        schema_path = data_dir / "schema.json"
-        reference_path = data_dir / "historical_reference.csv"
+        messy_df = pd.read_csv(data_dir / "messy_input.csv")
+        historical_df = pd.read_csv(data_dir / "historical_reference.csv")
 
-        if not schema_path.exists() or not reference_path.exists():
-            st.error("❌ Required data files not found. Please run the data generation script first.")
-            return None
+        # Load schema
+        with open(data_dir / "schema.json", 'r') as f:
+            schema = json.load(f)
 
-        monitor = DataQualityMonitor(
-            schema_path=str(schema_path),
-            reference_data_path=str(reference_path),
-            reports_dir="reports"
-        )
-        return monitor
+        return messy_df, historical_df, schema
     except Exception as e:
-        st.error(f"❌ Error initializing monitor: {str(e)}")
-        return None
+        st.error(f"Error loading data: {e}")
+        return None, None, None
 
-def display_quality_metrics(report_data):
-    """Display key quality metrics in cards."""
-    summary = report_data.get('summary', {})
+def create_metric_card(title, value, subtitle="", status="neutral"):
+    """Create a styled metric card."""
+    status_class = {
+        "success": "success-metric",
+        "warning": "warning-metric",
+        "error": "error-metric",
+        "neutral": ""
+    }.get(status, "")
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        score = summary.get('overall_quality_score', 0)
-        color_class = "status-good" if score >= 80 else "status-warning" if score >= 60 else "status-error"
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{score:.1f}%</div>
-            <div class="metric-label">Overall Quality Score</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        critical_issues = summary.get('critical_issues', 0)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{critical_issues}</div>
-            <div class="metric-label">Critical Issues</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        warnings = summary.get('warnings', 0)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{warnings}</div>
-            <div class="metric-label">Warnings</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        completeness = summary.get('completeness_rate', 0)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{completeness:.1f}%</div>
-            <div class="metric-label">Data Completeness</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-def display_data_completeness(completeness_data):
-    """Display data completeness visualization."""
-    st.subheader("📈 Data Completeness by Column")
-
-    if completeness_data and 'column_completeness' in completeness_data:
-        columns = list(completeness_data['column_completeness'].keys())
-        completeness_rates = [data['completeness_rate'] for data in completeness_data['column_completeness'].values()]
-
-        fig = px.bar(
-            x=columns,
-            y=completeness_rates,
-            title="Column Completeness Rates",
-            labels={'x': 'Column', 'y': 'Completeness (%)'},
-            color=completeness_rates,
-            color_continuous_scale=['red', 'yellow', 'green']
-        )
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
-
-def display_anomaly_detection(anomaly_data):
-    """Display anomaly detection results."""
-    st.subheader("🔍 Anomaly Detection Results")
-
-    if anomaly_data:
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            shift_count = anomaly_data.get('distribution_shifts', {}).get('shift_count', 0)
-            st.metric("Distribution Shifts", shift_count)
-
-        with col2:
-            spike_count = anomaly_data.get('missing_value_spikes', {}).get('spike_count', 0)
-            st.metric("Missing Value Spikes", spike_count)
-
-        with col3:
-            outlier_cols = anomaly_data.get('outliers', {}).get('columns_with_outliers', 0)
-            st.metric("Columns with Outliers", outlier_cols)
-
-        # Anomaly severity gauge
-        severity = anomaly_data.get('anomaly_severity', 'LOW')
-        severity_colors = {'LOW': 'green', 'MEDIUM': 'orange', 'HIGH': 'red'}
-        severity_color = severity_colors.get(severity, 'gray')
-
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=anomaly_data.get('anomaly_score', 0),
-            title={'text': f"Anomaly Severity: {severity}"},
-            gauge={'axis': {'range': [0, 10]},
-                   'bar': {'color': severity_color},
-                   'steps': [
-                       {'range': [0, 2], 'color': 'lightgreen'},
-                       {'range': [2, 5], 'color': 'lightyellow'},
-                       {'range': [5, 10], 'color': 'lightcoral'}
-                   ]}
-        ))
-        fig.update_layout(height=300)
-        st.plotly_chart(fig, use_container_width=True)
-
-def display_validation_results(validation_data):
-    """Display schema validation results."""
-    st.subheader("✅ Schema Validation Results")
-
-    if validation_data:
-        # Errors and warnings
-        errors = validation_data.get('errors', [])
-        warnings = validation_data.get('warnings', [])
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if errors:
-                st.error(f"❌ {len(errors)} Critical Issues")
-                for error in errors[:5]:  # Show first 5
-                    st.write(f"• {error}")
-                if len(errors) > 5:
-                    st.write(f"... and {len(errors) - 5} more")
-            else:
-                st.success("✅ No critical issues found")
-
-        with col2:
-            if warnings:
-                st.warning(f"⚠️ {len(warnings)} Warnings")
-                for warning in warnings[:5]:  # Show first 5
-                    st.write(f"• {warning}")
-                if len(warnings) > 5:
-                    st.write(f"... and {len(warnings) - 5} more")
-            else:
-                st.success("✅ No warnings")
-
-def display_drift_summary(drift_data):
-    """Display drift summary information."""
-    st.subheader("🌊 Data Drift Summary")
-
-    if drift_data:
-        severity = drift_data.get('overall_severity', 'LOW')
-        severity_colors = {'LOW': '🟢', 'MEDIUM': '🟡', 'HIGH': '🔴'}
-
-        st.write(f"**Overall Severity:** {severity_colors.get(severity, '⚪')} {severity}")
-
-        # Drift indicators
-        indicators = drift_data.get('drift_indicators', {})
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            shifts = indicators.get('distribution_shifts', {})
-            st.metric("Distribution Shifts",
-                     shifts.get('count', 0),
-                     delta=f"{shifts.get('severity', 'low').title()} severity")
-
-        with col2:
-            spikes = indicators.get('missing_value_spikes', {})
-            st.metric("Missing Value Spikes",
-                     spikes.get('count', 0),
-                     delta=f"{spikes.get('severity', 'low').title()} severity")
-
-        with col3:
-            outliers = indicators.get('outliers', {})
-            st.metric("Columns with Outliers",
-                     outliers.get('columns_affected', 0),
-                     delta=f"{outliers.get('severity', 'low').title()} severity")
-
-        # Recommendations
-        recommendations = drift_data.get('recommendations', [])
-        if recommendations:
-            st.subheader("💡 Recommendations")
-            for rec in recommendations:
-                st.info(f"• {rec}")
+    st.markdown(f"""
+    <div class="metric-card {status_class}">
+        <h3 style="margin: 0; color: #1f77b4;">{title}</h3>
+        <h2 style="margin: 5px 0; color: #333;">{value}</h2>
+        <p style="margin: 0; color: #666; font-size: 0.9em;">{subtitle}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 def main():
     """Main Streamlit application."""
-    # Header
-    st.markdown('<h1 class="main-header">📊 Data Quality & Monitoring Dashboard</h1>', unsafe_allow_html=True)
-    st.markdown("*Real-time ML data quality monitoring and automated reporting*")
+    st.title("📊 Data Quality & Monitoring Dashboard")
+    st.markdown("**Real-time monitoring for ML training datasets**")
 
-    # Sidebar
-    st.sidebar.title("🔧 Controls")
+    # Load data
+    messy_df, historical_df, schema = load_data()
 
-    # Load monitor
-    monitor = load_data_quality_monitor()
-    if not monitor:
+    if messy_df is None:
+        st.error("Failed to load data. Please ensure data files are present.")
         return
 
-    # Auto-refresh toggle
-    auto_refresh = st.sidebar.checkbox("Auto-refresh every 30 seconds", value=False)
+    # Initialize monitor
+    try:
+        monitor = DataQualityMonitor(
+            schema_path="data/schema.json",
+            reference_data_path="data/historical_reference.csv",
+            reports_dir="reports"
+        )
+    except Exception as e:
+        st.error(f"Failed to initialize monitor: {e}")
+        return
 
-    # Generate report button
-    if st.sidebar.button("🔄 Generate Fresh Report", type="primary"):
-        with st.spinner("Generating quality report..."):
-            # Load current data
-            data_path = Path(__file__).parent / "data" / "messy_input.csv"
-            if data_path.exists():
-                df = pd.read_csv(data_path)
-                report_data = monitor.generate_report(df)
-                st.session_state.report_data = report_data
-                st.success("✅ Report generated successfully!")
-            else:
-                st.error("❌ Dataset file not found")
+    # Sidebar
+    with st.sidebar:
+        st.header("⚙️ Controls")
 
-    # Load existing report if available
-    if 'report_data' not in st.session_state:
-        # Try to load latest report
-        reports_dir = Path("reports")
-        if reports_dir.exists():
-            json_files = list(reports_dir.glob("report_*.json"))
-            if json_files:
-                latest_report = max(json_files, key=lambda x: x.stat().st_mtime)
-                try:
-                    with open(latest_report, 'r') as f:
-                        st.session_state.report_data = json.load(f)
-                except:
-                    pass
+        if st.button("🔄 Generate Fresh Report", type="primary"):
+            with st.spinner("Generating quality report..."):
+                report = monitor.generate_report(messy_df)
+                st.success("Report generated successfully!")
+                st.rerun()
 
-    # Display report data
-    if 'report_data' in st.session_state:
-        report_data = st.session_state.report_data
+        st.divider()
+        st.subheader("📈 Dataset Info")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Rows", f"{len(messy_df):,}")
+        with col2:
+            st.metric("Columns", len(messy_df.columns))
 
-        # Key metrics
-        display_quality_metrics(report_data)
+        st.subheader("🎯 Schema Fields")
+        for field_name, field_config in schema['fields'].items():
+            required = "✅" if field_config.get('required', False) else "❌"
+            st.write(f"{required} {field_name}")
 
-        # Tabs for different views
-        tab1, tab2, tab3, tab4 = st.tabs(["📋 Overview", "🔍 Validation", "🌊 Drift Analysis", "📈 Completeness"])
+    # Main content tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🔍 Data Explorer", "📋 Quality Report", "📁 Reports"])
 
-        with tab1:
-            st.subheader("📋 Quality Report Overview")
+    with tab1:
+        # Overview Dashboard
+        st.header("Dashboard Overview")
 
-            metadata = report_data.get('report_metadata', {})
-            st.write(f"**Generated:** {metadata.get('generated_at', 'Unknown')}")
-            st.write(f"**Dataset Size:** {metadata.get('dataset_rows', 0)} rows, {metadata.get('dataset_columns', 0)} columns")
+        # Generate report for metrics
+        report = monitor.generate_report(messy_df)
+        summary = report['summary']
 
-            # Overall status
-            summary = report_data.get('summary', {})
-            if summary.get('critical_issues', 0) == 0:
-                st.success("✅ Dataset passed all critical quality checks")
-            else:
-                st.error(f"❌ Dataset has {summary.get('critical_issues', 0)} critical issues requiring attention")
+        # Key metrics row
+        col1, col2, col3, col4 = st.columns(4)
 
-        with tab2:
-            validation_data = report_data.get('schema_validation', {})
-            display_validation_results(validation_data)
+        with col1:
+            score = summary['overall_quality_score']
+            status = "success" if score >= 80 else "warning" if score >= 60 else "error"
+            create_metric_card(
+                "Quality Score",
+                ".1f",
+                "Overall assessment",
+                status
+            )
 
-        with tab3:
-            anomaly_data = report_data.get('anomaly_detection', {})
-            display_anomaly_detection(anomaly_data)
+        with col2:
+            create_metric_card(
+                "Critical Issues",
+                summary['critical_issues'],
+                "Errors found",
+                "error" if summary['critical_issues'] > 0 else "success"
+            )
 
-            drift_data = report_data.get('drift_summary', anomaly_data)  # Fallback to anomaly data
-            display_drift_summary(drift_data)
+        with col3:
+            create_metric_card(
+                "Warnings",
+                summary['warnings'],
+                "Potential issues",
+                "warning" if summary['warnings'] > 0 else "success"
+            )
 
-        with tab4:
-            completeness_data = report_data.get('data_completeness', {})
-            display_data_completeness(completeness_data)
+        with col4:
+            create_metric_card(
+                "Completeness",
+                ".1f",
+                "Data completeness rate",
+                "success" if summary['completeness_rate'] >= 95 else "warning"
+            )
 
-            # Overall completeness
-            overall = completeness_data.get('overall_completeness', 0)
-            st.metric("Overall Data Completeness", f"{overall:.1f}%")
-
-    else:
-        st.info("👆 Click 'Generate Fresh Report' to analyze your data quality")
-
-        # Sample data info
-        st.subheader("📊 Sample Dataset Information")
+        # Charts row
+        st.divider()
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("""
-            **Clean Reference Data:**
-            - 1,000 rows
-            - 5 columns (user_id, age, country, signup_date, spend)
-            - 100% data completeness
-            - No quality issues
-            """)
+            st.subheader("📈 Data Completeness by Column")
+
+            # Completeness chart
+            completeness_data = report['data_completeness']['column_completeness']
+            completeness_df = pd.DataFrame([
+                {
+                    'Column': col,
+                    'Completeness': stats['completeness_rate'],
+                    'Null Count': stats['null_count']
+                }
+                for col, stats in completeness_data.items()
+            ])
+
+            fig = px.bar(
+                completeness_df,
+                x='Column',
+                y='Completeness',
+                title="Column Completeness (%)",
+                color='Completeness',
+                color_continuous_scale=['red', 'yellow', 'green']
+            )
+            fig.update_layout(height=400)
+            st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            st.markdown("""
-            **Messy Input Data:**
-            - 800 rows with intentional issues
-            - Type inconsistencies (strings in numeric fields)
-            - Missing values (7-13% across columns)
-            - Invalid data and outliers
-            - Duplicate records
-            """)
+            st.subheader("🚨 Issues Summary")
 
-    # Footer
-    st.markdown("---")
-    st.markdown("*Built with ❤️ using Streamlit and automated data quality monitoring*")
+            # Issues breakdown
+            issues_data = {
+                'Type': ['Schema Errors', 'Schema Warnings', 'Anomaly Score'],
+                'Count': [
+                    summary['critical_issues'],
+                    summary['warnings'],
+                    summary.get('anomaly_score', 0)
+                ],
+                'Color': ['red', 'orange', 'blue']
+            }
 
-    # Auto-refresh
-    if auto_refresh:
-        time.sleep(30)
-        st.rerun()
+            if any(issues_data['Count']):
+                fig = px.pie(
+                    values=issues_data['Count'],
+                    names=issues_data['Type'],
+                    title="Issues Distribution",
+                    color_discrete_sequence=['#dc3545', '#ffc107', '#1f77b4']
+                )
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.success("🎉 No issues detected!")
+
+    with tab2:
+        # Data Explorer
+        st.header("Data Explorer")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            st.subheader("📋 Dataset Preview")
+            st.dataframe(messy_df.head(50), use_container_width=True)
+
+        with col2:
+            st.subheader("📊 Column Statistics")
+
+            selected_column = st.selectbox(
+                "Select column to analyze:",
+                messy_df.columns.tolist()
+            )
+
+            if selected_column:
+                col_data = messy_df[selected_column]
+
+                st.write(f"**Data Type:** {col_data.dtype}")
+                st.write(f"**Non-null Count:** {col_data.count()}/{len(col_data)}")
+
+                if col_data.dtype in ['int64', 'float64']:
+                    st.write(".2f")
+                    st.write(".2f")
+                    st.write(".2f")
+
+                    # Distribution plot
+                    fig = px.histogram(
+                        col_data.dropna(),
+                        title=f"Distribution of {selected_column}",
+                        marginal="box"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                elif col_data.dtype == 'object':
+                    # Value counts for categorical
+                    value_counts = col_data.value_counts().head(10)
+                    fig = px.bar(
+                        x=value_counts.index,
+                        y=value_counts.values,
+                        title=f"Top values in {selected_column}"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        # Quality Report
+        st.header("Quality Report Details")
+
+        # Schema validation results
+        st.subheader("🔍 Schema Validation")
+
+        validation = report['schema_validation']
+
+        if validation['errors']:
+            st.error("**Critical Issues Found:**")
+            for error in validation['errors']:
+                st.write(f"❌ {error}")
+
+        if validation['warnings']:
+            st.warning("**Warnings:**")
+            for warning in validation['warnings']:
+                st.write(f"⚠️ {warning}")
+
+        if not validation['errors'] and not validation['warnings']:
+            st.success("✅ Schema validation passed!")
+
+        # Anomaly detection
+        st.subheader("📈 Anomaly Detection")
+
+        anomalies = report['anomaly_detection']
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            shift_count = anomalies['distribution_shifts']['shift_count']
+            status = "error" if shift_count > 2 else "warning" if shift_count > 0 else "success"
+            st.metric("Distribution Shifts", shift_count)
+
+        with col2:
+            spike_count = anomalies['missing_value_spikes']['spike_count']
+            status = "error" if spike_count > 1 else "warning" if spike_count > 0 else "success"
+            st.metric("Missing Value Spikes", spike_count)
+
+        with col3:
+            outlier_cols = anomalies['outliers']['columns_with_outliers']
+            status = "error" if outlier_cols > 2 else "warning" if outlier_cols > 0 else "success"
+            st.metric("Columns with Outliers", outlier_cols)
+
+        # Detailed anomaly information
+        with st.expander("View Detailed Anomaly Report"):
+            st.json(anomalies)
+
+    with tab4:
+        # Reports Management
+        st.header("Reports Management")
+
+        reports_dir = Path("reports")
+        if reports_dir.exists():
+            report_files = list(reports_dir.glob("report_*.json"))
+
+            if report_files:
+                st.subheader("📄 Available Reports")
+
+                # Sort by modification time (newest first)
+                report_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+                for report_file in report_files[:5]:  # Show latest 5
+                    mod_time = datetime.fromtimestamp(report_file.stat().st_mtime)
+
+                    col1, col2, col3 = st.columns([3, 2, 1])
+
+                    with col1:
+                        st.write(f"**{report_file.name}**")
+                        st.caption(f"Generated: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                    with col2:
+                        file_size = report_file.stat().st_size / 1024
+                        st.caption(".1f")
+
+                    with col3:
+                        if st.button("📥 Download", key=f"download_{report_file.name}"):
+                            with open(report_file, 'r') as f:
+                                report_content = f.read()
+                            st.download_button(
+                                label="Download JSON",
+                                data=report_content,
+                                file_name=report_file.name,
+                                mime="application/json",
+                                key=f"dl_{report_file.name}"
+                            )
+
+                # HTML reports
+                html_files = list(reports_dir.glob("report_*.html"))
+                if html_files:
+                    st.subheader("🌐 HTML Reports")
+                    html_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+                    for html_file in html_files[:3]:
+                        mod_time = datetime.fromtimestamp(html_file.stat().st_mtime)
+                        st.write(f"📄 {html_file.name} - {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                        if st.button(f"🔗 Open {html_file.name}", key=f"open_{html_file.name}"):
+                            with open(html_file, 'r') as f:
+                                html_content = f.read()
+                            st.components.v1.html(html_content, height=600, scrolling=True)
+            else:
+                st.info("No reports found. Click 'Generate Fresh Report' to create one.")
+        else:
+            st.error("Reports directory not found.")
 
 if __name__ == "__main__":
     main()

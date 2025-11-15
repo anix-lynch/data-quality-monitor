@@ -1,0 +1,27 @@
+{
+  "fields": {
+    "user_id": {
+      "dtype": "string",
+      "required": true
+    },
+    "age": {
+      "dtype": "int",
+      "min": 0,
+      "max": 120,
+      "required": true
+    },
+    "country": {
+      "dtype": "string",
+      "required": false
+    },
+    "signup_date": {
+      "dtype": "datetime",
+      "required": true
+    },
+    "spend": {
+      "dtype": "float",
+      "min": 0,
+      "required": false
+    }
+  }
+}
