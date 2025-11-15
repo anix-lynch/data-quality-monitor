@@ -62,6 +62,30 @@ st.markdown("""
 def load_data():
     """Load sample datasets."""
     data_dir = Path("data")
+    data_dir.mkdir(exist_ok=True)
+
+    # Check if data files exist, generate if not
+    if not (data_dir / "messy_input.csv").exists() or not (data_dir / "historical_reference.csv").exists() or not (data_dir / "schema.json").exists():
+        st.info("🔄 Generating sample data for demonstration...")
+        try:
+            # Import here to avoid issues if not needed
+            from scripts.generate_sample_data import generate_schema, generate_historical_reference, generate_messy_input
+
+            # Generate and save data
+            schema = generate_schema()
+            with open(data_dir / "schema.json", 'w') as f:
+                json.dump(schema, f, indent=2)
+
+            historical_df = generate_historical_reference(1000)
+            historical_df.to_csv(data_dir / "historical_reference.csv", index=False)
+
+            messy_df = generate_messy_input(800)
+            messy_df.to_csv(data_dir / "messy_input.csv", index=False)
+
+            st.success("✅ Sample data generated successfully!")
+        except Exception as e:
+            st.error(f"❌ Error generating sample data: {e}")
+            return None, None, None
 
     # Load datasets
     try:
@@ -74,7 +98,7 @@ def load_data():
 
         return messy_df, historical_df, schema
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"❌ Error loading data: {e}")
         return None, None, None
 
 def create_metric_card(title, value, subtitle="", status="neutral"):
