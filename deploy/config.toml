@@ -3,7 +3,7 @@
 # All deployment settings in one unified location
 
 [project]
-name = "takehome3-data-quality"
+name = "data-quality-monitor"
 version = "1.0.0"
 description = "Data Quality Assessment and Validation System"
 
@@ -20,9 +20,9 @@ main_file = "app.py"
 framework = "streamlit"
 
 [github]
-repository = "https://github.com/anix-lynch/takehome3-data-quality"
+repository = "https://github.com/anix-lynch/data-quality-monitor"
 branch = "main"
-streamlit_url = "https://share.streamlit.io/anix-lynch/takehome3-data-quality/main/app.py"
+streamlit_url = "https://share.streamlit.io/anix-lynch/data-quality-monitor/main/app.py"
 
 [paths]
 # Unified asset paths (distro dojo)
